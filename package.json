@@ -1,0 +1,16 @@
+{
+  "name": "@edgeware/state-tester",
+  "version": "0.0.1",
+  "description": "State testing for verifying Edgeware migrations.",
+  "author": "jake@commonwealth.im",
+  "license": "GPL-3.0",
+  "main": "index.js",
+  "homepage": "https://github.com/hicommonwealth/edgeware-state-tester#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hicommonwealth/edgeware-state-tester.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
