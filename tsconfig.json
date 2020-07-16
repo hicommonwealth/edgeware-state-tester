@@ -8,8 +8,8 @@
     "allowSyntheticDefaultImports": true,
     "outDir": "./dist/"
   },
-  "files": [
-    "./src/index.ts"
+  "include": [
+    "./src"
   ],
   "exclude": [
     "**/*.spec.ts",

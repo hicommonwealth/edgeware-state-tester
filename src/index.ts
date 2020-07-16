@@ -39,7 +39,6 @@ class MigrationTester {
   private async _doUpgrade(): Promise<any> {
     // TODO
     console.log('Performing upgrade...');
-    return;
   }
 
   // construct API and initialize tests at some point in the chain's execution
@@ -71,12 +70,11 @@ class MigrationTester {
         const testsToRun = this.tests.filter((test) => blockNumber === upgradeBlock + test.runDelay);
         await Promise.all(testsToRun.map(async (t) => {
           try {
-            await t.run(this._api)
+            await t.run(this._api);
             console.log(`Test '${t.name}' succeeded.`);
           } catch (e) {
             console.log(`Test '${t.name}' failed: ${e.message}.`);
           }
-          return;
         }));
         if (this.tests.every((test) => test.complete)) {
           console.log('All tests complete!');
@@ -90,8 +88,8 @@ class MigrationTester {
 async function main() {
   // construct some migration tests
   const tests: MigrationTest[] = [];
-  const BalanceQueryTest = await import('./tests/balanceQuery');
-  tests.push(new BalanceQueryTest.default());
+  const BalanceQueryTest = (await import('./tests/balanceQuery')).default;
+  tests.push(new BalanceQueryTest());
 
   // construct tester
   const tester = new MigrationTester(tests);
