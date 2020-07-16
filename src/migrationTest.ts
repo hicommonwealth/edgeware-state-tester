@@ -1,11 +1,19 @@
 import { ApiPromise } from '@polkadot/api';
 
+// XOR type, one of the three
+export enum DelayType {
+  Blocks,
+  Sessions,
+  Eras
+}
+
 // A specific test case
 abstract class MigrationTest {
   // runDelay: # of blocks after upgrade to run the test
   constructor(
     public readonly name: string,
-    public readonly runDelay: number,
+    public readonly delayType: DelayType,
+    public readonly delayLength: number,
   ) { }
 
   // checks if the test has completed

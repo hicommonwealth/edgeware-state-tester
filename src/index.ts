@@ -1,11 +1,13 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { TypeRegistry } from '@polkadot/types';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
-import MigrationTest from './migrationTest';
+import MigrationTest, { DelayType } from './migrationTest';
 
 // Fixture to run test cases
 class MigrationTester {
   private _api: ApiPromise;
+  private _session: number;
+  private _era: number;
   constructor(private tests: MigrationTest[]) { }
 
   // TODO: figure out how to re-construct api pre/post upgrade
@@ -53,33 +55,55 @@ class MigrationTester {
   public async upgrade(upgradeDelay: number) {
     // fetch current block #
     const currentHeader = await this._api.rpc.chain.getHeader();
-    const upgradeBlock = +currentHeader.number + upgradeDelay;
+    const startBlock = +currentHeader.number + upgradeDelay;
+    const currentSessionEraInfo = await this._api.derive.session.indexes();
+    const startSession = +currentSessionEraInfo.currentIndex;
+    const startEra = +currentSessionEraInfo.currentEra;
 
     // subscribe to new blocks and run tests as they occur
     this._api.rpc.chain.subscribeNewHeads(async (header) => {
       const blockNumber = +header.number;
       console.log(`Got block ${blockNumber}.`);
+      const sessionEraInfo = await this._api.derive.session.indexes();
 
       // perform upgrade after delay
-      if (blockNumber === upgradeBlock) {
+      if (blockNumber === startBlock) {
         await this._doUpgrade();
       }
 
       // discover any tests that need to be run (TODO: sort rather than filter every block)
-      if (blockNumber >= upgradeBlock) {
-        const testsToRun = this.tests.filter((test) => blockNumber === upgradeBlock + test.runDelay);
-        await Promise.all(testsToRun.map(async (t) => {
-          try {
-            await t.run(this._api);
-            console.log(`Test '${t.name}' succeeded.`);
-          } catch (e) {
-            console.log(`Test '${t.name}' failed: ${e.message}.`);
-          }
-        }));
-        if (this.tests.every((test) => test.complete)) {
-          console.log('All tests complete!');
-          process.exit(0);
+      const testsToRun: MigrationTest[] = [];
+
+      // add session-based tests
+      if (this._session !== +sessionEraInfo.currentIndex) {
+        this._session = +sessionEraInfo.currentIndex;
+        testsToRun.push(...this.tests.filter((test) => test.delayType === DelayType.Sessions
+          && test.delayLength === (this._session - startSession)));
+      }
+
+      // add era-based tests
+      if (this._era !== +sessionEraInfo.currentEra) {
+        this._era = +sessionEraInfo.currentEra;
+        testsToRun.push(...this.tests.filter((test) => test.delayType === DelayType.Eras
+          && test.delayLength === (this._era - startEra)));
+      }
+
+      // add block-based tests
+      testsToRun.push(...this.tests.filter((test) => test.delayType === DelayType.Blocks
+        && test.delayLength === (blockNumber - startBlock)));
+
+      // run the selected tests
+      await Promise.all(testsToRun.map(async (t) => {
+        try {
+          await t.run(this._api);
+          console.log(`Test '${t.name}' succeeded.`);
+        } catch (e) {
+          console.log(`Test '${t.name}' failed: ${e.message}.`);
         }
+      }));
+      if (this.tests.every((test) => test.complete)) {
+        console.log('All tests complete!');
+        process.exit(0);
       }
     });
   }

@@ -1,13 +1,13 @@
 import { ApiPromise } from '@polkadot/api';
 import chai from 'chai';
-import MigrationTest from '../migrationTest';
+import MigrationTest, { DelayType } from '../migrationTest';
 
 class BalanceQueryTest extends MigrationTest {
   private readonly _address = 'hwR8hAatmmdupBLXQSxLUPBa8GhRomLD9hf6iRtFeXs8fcY';
-  private _bal;
+  private _bal: string;
 
   constructor() {
-    super('Balance Query Test', 3);
+    super('Balance Query Test', DelayType.Blocks, 3);
   }
 
   public async init(api: ApiPromise) {
