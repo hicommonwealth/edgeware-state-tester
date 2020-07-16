@@ -14,7 +14,10 @@
     "start": "ts-node src/index.ts"
   },
   "dependencies": {
+    "@edgeware/node-types": "^2.3.5",
     "@polkadot/api": "^1.24.1",
+    "@types/chai": "^4.2.11",
+    "chai": "^4.2.0",
     "ts-node": "^8.10.2",
     "typescript": "^3.9.6"
   }
