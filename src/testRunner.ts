@@ -2,7 +2,7 @@ import child_process from 'child_process';
 import fs from 'fs';
 import rimraf from 'rimraf';
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
@@ -202,9 +202,34 @@ class TestRunner {
   }
 
   // Performs an upgrade via a `sudo(setCode())` API call.
-  private async _doUpgrade(): Promise<any> {
-    // TODO
+  // 'useCodeChecks' specifies whether to perform API-level checks on the WASM blob,
+  //   and should be set to false for the current edgeware upgrade.
+  private async _doUpgrade(useCodeChecks: boolean): Promise<any> {
+    if (!this.options.upgrade) {
+      console.log('No upgrade to perform!');
+      return;
+    }
+
     console.log('Performing upgrade...');
+    const { sudoSeed, codePath } = this.options.upgrade;
+
+    // construct sudo-er keyring
+    const sudoKey = new Keyring().addFromMnemonic(sudoSeed);
+
+    // read WASM blob into memory
+    const wasmFileData = fs.readFileSync(codePath);
+    const wasmHex = `0x${wasmFileData.toString('hex')}`;
+    console.log(`Upgrade bytes: ${wasmHex.length}`);
+
+    // construct upgrade call that sudo will run
+    const upgradeCall = useCodeChecks
+      ? this._api.tx.system.setCode(wasmHex)
+      : this._api.tx.system.setCodeWithoutChecks(wasmHex);
+
+    // construct and submit sudo call using the sudo seed
+    const sudoCall = this._api.tx.sudo.sudo(upgradeCall.method);
+    const hash = await sudoCall.signAndSend(sudoKey);
+    console.log(`Upgrade performed with hash ${hash}!`);
   }
 
   // with a valid chain and API connection, init tests
@@ -270,8 +295,8 @@ class TestRunner {
       process.exit(0);
     }
 
-    // [5.] Upgrade chain via API
-    await this._doUpgrade();
+    // [5.] Upgrade chain via API (false = do not use code checks, for now)
+    await this._doUpgrade(false);
 
     // [6.] Restart chain with upgraded binary (if needed)
     this._stopApi();
@@ -282,7 +307,7 @@ class TestRunner {
       this._startChain(false);
     }
 
-    // [7.] Reconstruct API
+    // [7.] Reconstruct API (TODO: configure types specifically here)
     await this._startApi(false);
 
     // [8.] Run additional tests post-upgrade
