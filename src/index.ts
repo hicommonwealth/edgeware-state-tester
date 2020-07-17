@@ -1,14 +1,12 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { TypeRegistry } from '@polkadot/types';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
-import MigrationTest, { DelayType } from './migrationTest';
+import ChainTest from './chainTest';
 
 // Fixture to run test cases
 class MigrationTester {
   private _api: ApiPromise;
-  private _session: number;
-  private _era: number;
-  constructor(private tests: MigrationTest[]) { }
+  constructor(private tests: ChainTest[], private upgradeBlock: number) { }
 
   // TODO: figure out how to re-construct api pre/post upgrade
   // using different sets of types
@@ -47,61 +45,30 @@ class MigrationTester {
   public async init(url: string) {
     this._api = await this._constructApi(url);
     console.log(`Connected to chain at ${url}.`);
-    await Promise.all(this.tests.map((t) => t.init(this._api)));
-  }
-
-  // perform an upgrade, then kick off a subscription to run all tests after
-  // the provided delay
-  public async upgrade(upgradeDelay: number) {
-    // fetch current block #
-    const currentHeader = await this._api.rpc.chain.getHeader();
-    const startBlock = +currentHeader.number + upgradeDelay;
-    const currentSessionEraInfo = await this._api.derive.session.indexes();
-    const startSession = +currentSessionEraInfo.currentIndex;
-    const startEra = +currentSessionEraInfo.currentEra;
 
     // subscribe to new blocks and run tests as they occur
     this._api.rpc.chain.subscribeNewHeads(async (header) => {
       const blockNumber = +header.number;
       console.log(`Got block ${blockNumber}.`);
-      const sessionEraInfo = await this._api.derive.session.indexes();
 
       // perform upgrade after delay
-      if (blockNumber === startBlock) {
+      if (blockNumber === this.upgradeBlock) {
         await this._doUpgrade();
       }
 
-      // discover any tests that need to be run (TODO: sort rather than filter every block)
-      const testsToRun: MigrationTest[] = [];
-
-      // add session-based tests
-      if (this._session !== +sessionEraInfo.currentIndex) {
-        this._session = +sessionEraInfo.currentIndex;
-        testsToRun.push(...this.tests.filter((test) => test.delayType === DelayType.Sessions
-          && test.delayLength === (this._session - startSession)));
-      }
-
-      // add era-based tests
-      if (this._era !== +sessionEraInfo.currentEra) {
-        this._era = +sessionEraInfo.currentEra;
-        testsToRun.push(...this.tests.filter((test) => test.delayType === DelayType.Eras
-          && test.delayLength === (this._era - startEra)));
-      }
-
-      // add block-based tests
-      testsToRun.push(...this.tests.filter((test) => test.delayType === DelayType.Blocks
-        && test.delayLength === (blockNumber - startBlock)));
-
+      const testsToRun = this.tests
+        .map((t) => t.tests[blockNumber]) // get all tests runnable at this block
+        .filter((f) => !!f);              // remove undefined tests
       // run the selected tests
       await Promise.all(testsToRun.map(async (t) => {
         try {
-          await t.run(this._api);
+          await t(this._api);
           console.log(`Test '${t.name}' succeeded.`);
         } catch (e) {
           console.log(`Test '${t.name}' failed: ${e.message}.`);
         }
       }));
-      if (this.tests.every((test) => test.complete)) {
+      if (this.tests.every((test) => test.isComplete(blockNumber))) {
         console.log('All tests complete!');
         process.exit(0);
       }
@@ -111,14 +78,13 @@ class MigrationTester {
 
 async function main() {
   // construct some migration tests
-  const tests: MigrationTest[] = [];
+  const tests: ChainTest[] = [];
   const BalanceQueryTest = (await import('./tests/balanceQuery')).default;
   tests.push(new BalanceQueryTest());
 
   // construct tester
-  const tester = new MigrationTester(tests);
+  const tester = new MigrationTester(tests, 7);
   await tester.init('ws://mainnet1.edgewa.re:9944');
-  await tester.upgrade(2);
 }
 
 // kick off test script
