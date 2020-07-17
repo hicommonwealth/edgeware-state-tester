@@ -2,8 +2,6 @@ import { ApiPromise, Keyring } from '@polkadot/api';
 
 // A specific test case
 abstract class ChainTest {
-  protected readonly accounts: string[];
-
   // runDelay: # of blocks after upgrade to run the test
   constructor(
     // the publicly-displayable name of the test (usually set in the `super` call)
@@ -12,11 +10,16 @@ abstract class ChainTest {
     // we use the accounts if we need to e.g. send a tx
     protected readonly accountSeeds: string[],
     protected readonly ss58Prefix: number,
-  ) {
+  ) { }
+
+  private _seedToAddress(s: string): string {
     // convert seeds to addresses for use in test cases
-    this.accounts = accountSeeds.map((seed) => {
-      return new Keyring({ ss58Format: ss58Prefix }).addFromMnemonic(seed).address;
-    });
+    return new Keyring({ ss58Format: this.ss58Prefix, type: 'sr25519' }).addFromUri(s).address;
+  }
+
+  // fetches account corresponding to a seed index
+  protected account(idx: number) {
+    return this._seedToAddress(this.accountSeeds[idx]);
   }
 
   // checks if the test has completed

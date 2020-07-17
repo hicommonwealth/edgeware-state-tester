@@ -14,14 +14,14 @@ class BalanceQueryTest extends ChainTest {
     2: {
       name: 'fetch initial account balances',
       fn: async (api: ApiPromise) => {
-        const bal = await api.query.balances.account(this.accounts[0]);
+        const bal = await api.query.balances.account(this.account(0));
         this._bal = JSON.stringify(bal);
       },
     },
     5: {
       name: 'ensure balances equal',
       fn: async (api: ApiPromise) => {
-        const bal = await api.query.balances.account(this.accounts[0]);
+        const bal = await api.query.balances.account(this.account(0));
         chai.assert.equal(this._bal, JSON.stringify(bal));
       }
     }

@@ -6,7 +6,7 @@ const CHAINSPEC = 'dev';
 const BINARY_PATH = '../edgeware-node/target/release/edgeware';
 const CHAIN_BASE_PATH = './chain-db';
 const ACCOUNTS = [ '//Alice' ];
-const SS58_PREFIX = 0; // all testing chain specs use 0
+const SS58_PREFIX = 42; // default for testing chain specs
 
 const UPGRADE_BINARY = '../edgeware-node-time-travel/target/release/edgeware';
 const UPGRADE_BLOCK = 3;
@@ -28,13 +28,13 @@ async function main() {
     accountSeeds: ACCOUNTS,
     ss58Prefix: SS58_PREFIX,
     chainLogPath: path.join(CHAIN_BASE_PATH, 'out.log'),
-    upgrade: null,
-    /* upgrade: {
+    // upgrade: null,
+    upgrade: {
       codePath: UPGRADE_CODE,
       binaryPath: UPGRADE_BINARY,
       block: UPGRADE_BLOCK,
       sudoSeed: SUDO_SEED,
-    }, */
+    },
   });
 
   await tester.run();

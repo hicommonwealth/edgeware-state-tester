@@ -1,6 +1,7 @@
 import child_process from 'child_process';
 import fs from 'fs';
 import rimraf from 'rimraf';
+import BN from 'bn.js';
 
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { UnsubscribePromise } from '@polkadot/api/types';
@@ -237,7 +238,8 @@ class TestRunner {
     const { sudoSeed, codePath } = this.options.upgrade;
 
     // construct sudo-er keyring
-    const sudoKey = new Keyring().addFromMnemonic(sudoSeed);
+    const sudoKey = (new Keyring({ ss58Format: this.options.ss58Prefix, type: 'sr25519' }))
+      .addFromUri(sudoSeed);
 
     // read WASM blob into memory
     const wasmFileData = fs.readFileSync(codePath);
@@ -257,6 +259,18 @@ class TestRunner {
   // with a valid chain and API connection, init tests
   private async _runTests(): Promise<boolean> {
     if (!this._api) throw new Error('API not initialized!');
+
+    // TODO: move this set-balance into a test case
+    if (this.options.upgrade.sudoSeed) {
+      const sudoKeyring = (new Keyring({ ss58Format: this.options.ss58Prefix, type: 'sr25519' }))
+        .addFromUri(this.options.upgrade.sudoSeed);
+      const newBalance = new BN('1000000000000000000000000');
+      const setBalanceTx = this._api.tx.sudo.sudo(
+        this._api.tx.balances.setBalance(sudoKeyring.address, newBalance, 0)
+      );
+      const hash = await setBalanceTx.signAndSend(sudoKeyring);
+      console.log('Set sudo balance!');
+    }
 
     let rpcSubscription: UnsubscribePromise;
     // subscribe to new blocks and run tests as they occur
