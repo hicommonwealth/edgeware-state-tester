@@ -3,21 +3,27 @@ import chai from 'chai';
 import ChainTest from '../chainTest';
 
 class BalanceQueryTest extends ChainTest {
-  private readonly _address = 'hwR8hAatmmdupBLXQSxLUPBa8GhRomLD9hf6iRtFeXs8fcY';
   private _bal: string;
 
-  constructor() {
-    super('Balance Query Test');
+  constructor(accountSeeds: string[], ss58Prefix: number) {
+    super('Balance Query Test', accountSeeds, ss58Prefix);
+    if (accountSeeds.length === 0) throw new Error(`${this.name} requires at least one account!`);
   }
 
-  public readonly tests = {
-    5: async (api: ApiPromise) => {
-      const bal = await api.query.balances.account(this._address);
-      this._bal = JSON.stringify(bal);
+  public readonly actions = {
+    2: {
+      name: 'fetch initial account balances',
+      fn: async (api: ApiPromise) => {
+        const bal = await api.query.balances.account(this.accounts[0]);
+        this._bal = JSON.stringify(bal);
+      },
     },
-    10: async (api: ApiPromise) => {
-      const bal = await api.query.balances.account(this._address);
-      chai.assert.equal(this._bal, JSON.stringify(bal));
+    4: {
+      name: 'ensure balances equal',
+      fn: async (api: ApiPromise) => {
+        const bal = await api.query.balances.account(this.accounts[0]);
+        chai.assert.equal(this._bal, JSON.stringify(bal));
+      }
     }
   }
 }

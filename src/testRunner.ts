@@ -1,19 +1,42 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
 import ChainTest from './chainTest';
 
 class TestRunner {
   private _api: ApiPromise;
-  constructor(private tests: ChainTest[], private upgradeBlock: number) { }
+  constructor(
+    // set of tests to run
+    private tests: ChainTest[],
+
+    // optional upgrade info, if present will run an upgrade
+    private upgradeBinPath?: string,
+    private upgradeBlock?: number,
+  ) {
+    if (upgradeBinPath && upgradeBlock) {
+      console.log(`Will upgrade on block ${upgradeBlock} from ${upgradeBinPath}.`);
+    } else {
+      console.log('Will not perform upgrade during testing.');
+    }
+  }
 
   // TODO: figure out how to re-construct api pre/post upgrade
   // using different sets of types
-  private _constructApi(url: string): Promise<ApiPromise> {
+  private async _constructApi(url: string): Promise<ApiPromise> {
+    // initialize provider and wait for connection
+    const provider = new WsProvider(url);
+    let unsubscribe: () => void;
+    await new Promise((resolve) => {
+      unsubscribe = provider.on('connected', () => resolve());
+    });
+    unsubscribe();
+
+    // using provider, initialize the full API
     const edgTypes: { [name: string]: string } = Object.values(EdgDefs)
       .reduce((res, { types }) => ({ ...res, ...types }), {});
     const api = new ApiPromise({
-      provider: new WsProvider(url),
+      provider,
       registry: new TypeRegistry(),
       types: {
         ...edgTypes,
@@ -41,37 +64,46 @@ class TestRunner {
   }
 
   // construct API and initialize tests at some point in the chain's execution
-  public async init(url: string) {
+  public async run(url: string) {
+    console.log(`Connecting to chain at ${url}...`);
     this._api = await this._constructApi(url);
     console.log(`Connected to chain at ${url}.`);
 
     // subscribe to new blocks and run tests as they occur
-    this._api.rpc.chain.subscribeNewHeads(async (header) => {
-      const blockNumber = +header.number;
-      console.log(`Got block ${blockNumber}.`);
+    let rpcSubscription: UnsubscribePromise;
+    const testCompleteP = new Promise((resolve) => {
+      rpcSubscription = this._api.rpc.chain.subscribeNewHeads(async (header) => {
+        const blockNumber = +header.number;
+        console.log(`Got block ${blockNumber}.`);
 
-      // perform upgrade after delay
-      if (blockNumber === this.upgradeBlock) {
-        await this._doUpgrade();
-      }
-
-      const testsToRun = this.tests
-        .map((t) => t.tests[blockNumber]) // get all tests runnable at this block
-        .filter((f) => !!f);              // remove undefined tests
-      // run the selected tests
-      await Promise.all(testsToRun.map(async (t) => {
-        try {
-          await t(this._api);
-          console.log(`Test '${t.name}' succeeded.`);
-        } catch (e) {
-          console.log(`Test '${t.name}' failed: ${e.message}.`);
+        // perform upgrade after delay
+        if (this.upgradeBinPath && blockNumber === this.upgradeBlock) {
+          await this._doUpgrade();
         }
-      }));
-      if (this.tests.every((test) => test.isComplete(blockNumber))) {
-        console.log('All tests complete!');
-        process.exit(0);
-      }
+
+        const runnableTests = this.tests.filter((t) => !!t.actions[blockNumber]);
+        // run the selected tests
+        await Promise.all(runnableTests.map(async (t) => {
+          const { name, fn } = t.actions[blockNumber];
+          try {
+            await fn(this._api);
+            console.log(`Test '${t.name}' action '${name}' succeeded.`);
+          } catch (e) {
+            console.log(`Test '${t.name}' action '${name}' failed: ${e.message}.`);
+          }
+        }));
+        if (this.tests.every((test) => test.isComplete(blockNumber))) {
+          console.log('All tests complete!');
+          resolve();
+        }
+      });
     });
+
+    // wait for the tests to complete
+    await testCompleteP;
+
+    // once all tests complete, kill the chain subscription
+    if (rpcSubscription) await rpcSubscription;
   }
 }
 
