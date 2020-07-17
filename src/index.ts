@@ -28,12 +28,13 @@ async function main() {
     accountSeeds: ACCOUNTS,
     ss58Prefix: SS58_PREFIX,
     chainLogPath: path.join(CHAIN_BASE_PATH, 'out.log'),
-    upgrade: {
+    upgrade: null,
+    /* upgrade: {
       codePath: UPGRADE_CODE,
       binaryPath: UPGRADE_BINARY,
       block: UPGRADE_BLOCK,
       sudoSeed: SUDO_SEED,
-    },
+    }, */
   });
 
   await tester.run();

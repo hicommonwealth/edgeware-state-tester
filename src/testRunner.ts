@@ -64,13 +64,35 @@ class TestRunner {
     private tests: ChainTest[],
     private options: ITestOptions,
   ) {
+    // verify options args
+    if (!options.chainspec) {
+      throw new Error('missing chainspec!');
+    }
+    if (!options.binaryPath || !fs.existsSync(options.binaryPath)) {
+      throw new Error('cannot find chain executable!');
+    }
+
+    // set defaults
+    if (typeof options.ss58Prefix !== 'number') {
+      console.log('No SS58 prefix found, defaulting to 0.');
+      options.ss58Prefix = 0;
+    }
     if (options.upgrade) {
+      if (!options.upgrade.codePath || !fs.existsSync(options.upgrade.codePath)) {
+        throw new Error('cannot find upgrade codepath!');
+      }
+      if (!options.upgrade.block) {
+        throw new Error('invalid upgrade block!');
+      }
+      if (!options.upgrade.sudoSeed) {
+        throw new Error('invalid sudo seed!');
+      }
       console.log(`Will perform upgrade on block ${options.upgrade.block}.`);
     } else {
       console.log('Will not perform upgrade during testing.');
     }
     if (!options.wsUrl) {
-      console.log('Defaulting chain URL to ws://localhost:9944.');
+      console.log('No websocket URL found, defaulting to ws://localhost:9944.');
       options.wsUrl = 'ws://localhost:9944';
     }
   }
@@ -227,7 +249,7 @@ class TestRunner {
       : this._api.tx.system.setCodeWithoutChecks(wasmPrefixed);
 
     // construct and submit sudo call using the sudo seed
-    const sudoCall = this._api.tx.sudo.sudo(upgradeCall.method);
+    const sudoCall = this._api.tx.sudo.sudo(upgradeCall);
     const hash = await sudoCall.signAndSend(sudoKey);
     console.log(`Upgrade performed with hash ${hash}!`);
   }
