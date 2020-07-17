@@ -5,6 +5,7 @@ import rimraf from 'rimraf';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
+import { compactAddLength } from '@polkadot/util';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
 import ChainTest from './chainTest';
 
@@ -218,13 +219,12 @@ class TestRunner {
 
     // read WASM blob into memory
     const wasmFileData = fs.readFileSync(codePath);
-    const wasmHex = `0x${wasmFileData.toString('hex')}`;
-    console.log(`Upgrade bytes: ${wasmHex.length}`);
+    const wasmPrefixed = compactAddLength(wasmFileData);
 
     // construct upgrade call that sudo will run
     const upgradeCall = useCodeChecks
-      ? this._api.tx.system.setCode(wasmHex)
-      : this._api.tx.system.setCodeWithoutChecks(wasmHex);
+      ? this._api.tx.system.setCode(wasmPrefixed)
+      : this._api.tx.system.setCodeWithoutChecks(wasmPrefixed);
 
     // construct and submit sudo call using the sudo seed
     const sudoCall = this._api.tx.sudo.sudo(upgradeCall.method);

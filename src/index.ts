@@ -9,7 +9,7 @@ const ACCOUNTS = [ '//Alice' ];
 const SS58_PREFIX = 0; // all testing chain specs use 0
 
 const UPGRADE_BINARY = '../edgeware-node-time-travel/target/release/edgeware';
-const UPGRADE_BLOCK = 5;
+const UPGRADE_BLOCK = 3;
 const UPGRADE_CODE = './test_runtime.wasm';
 const SUDO_SEED = '//Alice';
 

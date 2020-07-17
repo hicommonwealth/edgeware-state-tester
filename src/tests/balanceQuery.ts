@@ -11,14 +11,14 @@ class BalanceQueryTest extends ChainTest {
   }
 
   public readonly actions = {
-    3: {
+    2: {
       name: 'fetch initial account balances',
       fn: async (api: ApiPromise) => {
         const bal = await api.query.balances.account(this.accounts[0]);
         this._bal = JSON.stringify(bal);
       },
     },
-    8: {
+    5: {
       name: 'ensure balances equal',
       fn: async (api: ApiPromise) => {
         const bal = await api.query.balances.account(this.accounts[0]);
