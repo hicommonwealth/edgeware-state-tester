@@ -8,7 +8,7 @@ import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
 import { compactAddLength } from '@polkadot/util';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
-import ChainTest from './chainTest';
+import StateTest from './stateTest';
 
 // configuration options for test runner
 export interface ITestOptions {
@@ -62,7 +62,7 @@ class TestRunner {
   private _chainProcess: child_process.ChildProcess;
 
   constructor(
-    private tests: ChainTest[],
+    private tests: StateTest[],
     private options: ITestOptions,
   ) {
     // verify options args

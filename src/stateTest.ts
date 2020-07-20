@@ -1,7 +1,7 @@
 import { ApiPromise, Keyring } from '@polkadot/api';
 
 // A specific test case
-abstract class ChainTest {
+abstract class StateTest {
   // runDelay: # of blocks after upgrade to run the test
   constructor(
     // the publicly-displayable name of the test (usually set in the `super` call)
@@ -34,4 +34,4 @@ abstract class ChainTest {
   } };
 }
 
-export default ChainTest;
+export default StateTest;

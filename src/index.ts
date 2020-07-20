@@ -1,6 +1,6 @@
 import path from 'path';
 import TestRunner from './testRunner';
-import ChainTest from './chainTest';
+import StateTest from './stateTest';
 
 const CHAINSPEC = 'dev';
 const BINARY_PATH = '../edgeware-node/target/release/edgeware';
@@ -16,7 +16,7 @@ const SUDO_SEED = '//Alice';
 async function main() {
   // construct some migration tests
   // TODO: make this a part of the arg initialization
-  const tests: ChainTest[] = [];
+  const tests: StateTest[] = [];
   const BalanceQueryTest = (await import('./tests/balanceQuery')).default;
   tests.push(new BalanceQueryTest(ACCOUNTS, SS58_PREFIX));
 

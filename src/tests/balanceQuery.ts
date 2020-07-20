@@ -1,8 +1,8 @@
 import { ApiPromise } from '@polkadot/api';
 import chai from 'chai';
-import ChainTest from '../chainTest';
+import StateTest from '../stateTest';
 
-class BalanceQueryTest extends ChainTest {
+class BalanceQueryTest extends StateTest {
   private _bal: string;
 
   constructor(accountSeeds: string[], ss58Prefix: number) {
