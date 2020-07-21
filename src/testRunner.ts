@@ -6,7 +6,6 @@ import BN from 'bn.js';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
-import { compactAddLength } from '@polkadot/util';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
 import StateTest from './stateTest';
 
@@ -145,17 +144,24 @@ class TestRunner {
   }
 
   // Stops an active chain and closes any file used to store its output.
-  private _stopChain() {
+  private async _stopChain() {
+    // if (this._chainOutstream) {
+    //   this._chainOutstream = undefined;
+    // }
+    // if (this._chainOutfile) {
+    //   this._chainOutfile.close();
+    //   this._chainOutfile = undefined;
+    // }
     if (this._chainProcess) {
-      this._chainProcess.kill(9);
-      delete this._chainProcess;
-    }
-    if (this._chainOutstream) {
-      delete this._chainOutstream;
-    }
-    if (this._chainOutfile) {
-      this._chainOutfile.close();
-      delete this._chainOutfile;
+      await new Promise((resolve) => {
+        this._chainProcess.on('close', (code) => {
+          console.log(`Edgeware exited with code ${code}.`);
+          resolve();
+        });
+        console.log('Sending kill signal to Edgeware.');
+        this._chainProcess.kill(9);
+        this._chainProcess = undefined;
+      });
     }
   }
 
@@ -243,17 +249,27 @@ class TestRunner {
 
     // read WASM blob into memory
     const wasmFileData = fs.readFileSync(codePath);
-    const wasmPrefixed = compactAddLength(wasmFileData);
+    const data = new Uint8Array(wasmFileData);
+    const codecData = this._api.createType('Bytes', data);
 
     // construct upgrade call that sudo will run
     const upgradeCall = useCodeChecks
-      ? this._api.tx.system.setCode(wasmPrefixed)
-      : this._api.tx.system.setCodeWithoutChecks(wasmPrefixed);
+      ? this._api.tx.system.setCode(codecData)
+      : this._api.tx.system.setCodeWithoutChecks(codecData);
 
     // construct and submit sudo call using the sudo seed
     const sudoCall = this._api.tx.sudo.sudo(upgradeCall);
-    const hash = await sudoCall.signAndSend(sudoKey);
-    console.log(`Upgrade performed with hash ${hash}!`);
+    let txUnsubscribe: () => void;
+    /* eslint-disable-next-line no-async-promise-executor */
+    await new Promise(async (resolve) => {
+      txUnsubscribe = await sudoCall.signAndSend(sudoKey, (result) => {
+        if (result.status.isFinalized) {
+          console.log('Upgrade TX finalized!');
+          resolve();
+        }
+      });
+    });
+    if (txUnsubscribe) txUnsubscribe();
   }
 
   // with a valid chain and API connection, init tests
@@ -327,7 +343,7 @@ class TestRunner {
     // end run if no upgrade needed
     if (!needsUpgrade) {
       this._stopApi();
-      this._stopChain();
+      await this._stopChain();
       process.exit(0);
     }
 
@@ -335,23 +351,25 @@ class TestRunner {
     await this._doUpgrade(false);
 
     // [6.] Restart chain with upgraded binary (if needed)
+    /* TODO: uncomment this when the upgrade goes successfully
     this._stopApi();
     if (this.options.upgrade.binaryPath
         && this.options.binaryPath !== this.options.upgrade.binaryPath) {
-      this._stopChain();
+      await this._stopChain();
       this.options.binaryPath = this.options.upgrade.binaryPath;
       this._startChain(false);
     }
 
     // [7.] Reconstruct API (TODO: configure types specifically here)
     await this._startApi(false);
+    */
 
     // [8.] Run additional tests post-upgrade
     await this._runTests();
 
     // Cleanup and exit
     this._stopApi();
-    this._stopChain();
+    await this._stopChain();
     process.exit(0);
   }
 }
