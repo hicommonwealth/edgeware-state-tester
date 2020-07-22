@@ -6,6 +6,7 @@ import BN from 'bn.js';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
+import { compactAddLength } from '@polkadot/util';
 import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
 import StateTest from './stateTest';
 
@@ -250,7 +251,7 @@ class TestRunner {
     // read WASM blob into memory
     const wasmFileData = fs.readFileSync(codePath);
     const data = new Uint8Array(wasmFileData);
-    const codecData = this._api.createType('Bytes', data);
+    const codecData = compactAddLength(data);
 
     // construct upgrade call that sudo will run
     const upgradeCall = useCodeChecks
