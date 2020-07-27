@@ -113,15 +113,13 @@ class TestRunner {
     }
 
     // open log files if necessary to configure the chain output stream
-    if (this.options.chainLogPath === 'stdout') {
-      this._chainOutstream = process.stdout;
-    } else if (this.options.chainLogPath === 'stderr') {
-      this._chainOutstream = process.stderr;
-    } else if (this.options.chainLogPath) {
+    if (this.options.chainLogPath) {
       // we set the 'a' flag to avoid overwriting the file when we re-init this
       // file stream on upgrade
       this._chainOutfile = fs.createWriteStream(this.options.chainLogPath, { flags: 'a' });
       this._chainOutstream = this._chainOutfile;
+    } else {
+      this._chainOutstream = process.stdout;
     }
 
     // start the chain with specified spec and basepath
@@ -129,13 +127,18 @@ class TestRunner {
       '--chain', this.options.chainspec,
       '--base-path', this.options.chainBasePath,
       '--alice', // TODO: abstract this into accounts somehow
+      '-l', 'ws=trace,ws::handler=info'
     ];
     console.log('Executing', this.options.binaryPath, 'with args', args);
-    this._chainProcess = child_process.execFile(this.options.binaryPath, args, { }, (error) => {
-      // callback on exit
-      if (error) console.log(`Received chain process error: ${error.message}.`);
-      console.log('Chain exited.');
-    });
+    this._chainProcess = child_process.spawn(
+      this.options.binaryPath,
+      args,
+      // (error) => {
+      //   // callback on exit
+      //   if (error) console.log(`Received chain process error: ${error.message}.`);
+      //   console.log('Chain exited.');
+      // }
+    );
 
     // pipe edgeware output to file in temp dir/process output if set
     if (this._chainOutstream) {
