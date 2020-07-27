@@ -328,7 +328,7 @@ class TestRunner {
     const needsUpgrade = await testCompleteP;
 
     // once all tests complete, kill the chain subscription
-    if (rpcSubscription) await rpcSubscription;
+    if (rpcSubscription) (await rpcSubscription)();
     return needsUpgrade;
   }
 
