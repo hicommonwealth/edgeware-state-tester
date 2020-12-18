@@ -2,6 +2,9 @@ import path from 'path';
 import TestRunner from './testRunner';
 import StateTest from './stateTest';
 
+import { factory, formatFilename } from './logging';
+const log = factory.getLogger(formatFilename(__filename));
+
 const CHAINSPEC = 'dev';
 const BINARY_PATH = '../edgeware-node-3.0.8/target/release/edgeware';
 const CHAIN_BASE_PATH = './chain-db';
@@ -37,7 +40,13 @@ async function main() {
     },
   });
 
-  await tester.run();
+  try {
+    await tester.run();
+    process.exit(0);
+  } catch (e) {
+    log.error(`TESTER FAILURE: ${e.message}`);
+    process.exit(1);
+  }
 }
 
 // kick off test script

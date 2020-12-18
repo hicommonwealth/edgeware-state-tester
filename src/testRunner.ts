@@ -10,6 +10,9 @@ import { compactAddLength } from '@polkadot/util';
 import { dev } from '@edgeware/node-types';
 import StateTest from './stateTest';
 
+import { factory, formatFilename } from './logging';
+const log = factory.getLogger(formatFilename(__filename));
+
 // configuration options for test runner
 export interface ITestOptions {
   // spec of chain to run, should be 'dev' for test chains
@@ -75,7 +78,7 @@ class TestRunner {
 
     // set defaults
     if (typeof options.ss58Prefix !== 'number') {
-      console.log('No SS58 prefix found, defaulting to 0.');
+      log.info('No SS58 prefix found, defaulting to 0.');
       options.ss58Prefix = 0;
     }
     if (options.upgrade) {
@@ -88,12 +91,12 @@ class TestRunner {
       if (!options.upgrade.sudoSeed) {
         throw new Error('invalid sudo seed!');
       }
-      console.log(`Will perform upgrade on block ${options.upgrade.block}.`);
+      log.info(`Will perform upgrade on block ${options.upgrade.block}.`);
     } else {
-      console.log('Will not perform upgrade during testing.');
+      log.info('Will not perform upgrade during testing.');
     }
     if (!options.wsUrl) {
-      console.log('No websocket URL found, defaulting to ws://localhost:9944.');
+      log.info('No websocket URL found, defaulting to ws://localhost:9944.');
       options.wsUrl = 'ws://localhost:9944';
     }
   }
@@ -103,6 +106,13 @@ class TestRunner {
   // 'clearBasePath' is set to true to remove the chain database at startup,
   //   for a clean start, whereas post-upgrade it should be false.
   private _startChain(clearBasePath: boolean) {
+    // pass through SIGINT to chain process
+    process.on('SIGINT', () => {
+      if (this._chainProcess && this._chainProcess.connected) {
+        this._chainProcess.kill('SIGINT');
+      }
+    });
+
     if (clearBasePath) {
       // clear base path and replace with an empty directory
       if (fs.existsSync(this.options.chainBasePath)) {
@@ -129,14 +139,14 @@ class TestRunner {
       '--alice', // TODO: abstract this into accounts somehow
       '-l', 'ws::handler=info'
     ];
-    console.log('Executing', this.options.binaryPath, 'with args', args);
+    log.info(`Executing ${this.options.binaryPath} with args ${JSON.stringify(args)}`);
     this._chainProcess = child_process.spawn(
       this.options.binaryPath,
       args,
       // (error) => {
       //   // callback on exit
-      //   if (error) console.log(`Received chain process error: ${error.message}.`);
-      //   console.log('Chain exited.');
+      //   if (error) log.info(`Received chain process error: ${error.message}.`);
+      //   log.info('Chain exited.');
       // }
     );
 
@@ -159,10 +169,10 @@ class TestRunner {
     if (this._chainProcess) {
       await new Promise<void>((resolve) => {
         this._chainProcess.on('close', (code) => {
-          console.log(`Edgeware exited with code ${code}.`);
+          log.info(`Edgeware exited with code ${code}.`);
           resolve();
         });
-        console.log('Sending kill signal to Edgeware.');
+        log.info('Sending kill signal to Edgeware.');
         this._chainProcess.kill(9);
         this._chainProcess = undefined;
       });
@@ -170,9 +180,9 @@ class TestRunner {
   }
 
   // With a valid chain running, construct a polkadot-js API and
-  // initialize a connection to the chain.
-  private async _startApi(): Promise<void> {
-    console.log(`Connecting to chain at ${this.options.wsUrl}...`);
+  // initialize a connection to the chain. Returns the spec version.
+  private async _startApi(): Promise<number> {
+    log.info(`Connecting to chain at ${this.options.wsUrl}...`);
 
     // initialize provider separately from the API: the API throws an error
     // if the chain is not available immediately
@@ -190,6 +200,11 @@ class TestRunner {
     const registry = new TypeRegistry();
     this._api = new ApiPromise({ provider, registry, ...dev });
     await this._api.isReady;
+
+    // fetch and print chain information
+    const chainInfo = await this._api.rpc.state.getRuntimeVersion();
+    log.info(`API connected to chain ${chainInfo.specName.toString()}:${+chainInfo.specVersion}!`);
+    return +chainInfo.specVersion;
   }
 
   // Disconnect an active polkadot-js API from the chain.
@@ -205,11 +220,11 @@ class TestRunner {
   //   and should be set to false for the current edgeware upgrade.
   private async _doUpgrade(useCodeChecks: boolean = true): Promise<any> {
     if (!this.options.upgrade) {
-      console.log('No upgrade to perform!');
+      log.info('No upgrade to perform!');
       return;
     }
 
-    console.log('Performing upgrade...');
+    log.info('Performing upgrade...');
     const { sudoSeed, codePath } = this.options.upgrade;
 
     // construct sudo-er keyring
@@ -233,7 +248,7 @@ class TestRunner {
     await new Promise<void>(async (resolve) => {
       txUnsubscribe = await sudoCall.signAndSend(sudoKey, (result) => {
         if (result.status.isInBlock) {
-          console.log('Upgrade TX in block!');
+          log.info('Upgrade TX in block!');
           resolve();
         }
       });
@@ -254,7 +269,7 @@ class TestRunner {
         this._api.tx.balances.setBalance(sudoKeyring.address, newBalance, 0)
       );
       const hash = await setBalanceTx.signAndSend(sudoKeyring);
-      console.log('Set sudo balance!');
+      log.info('Set sudo balance!');
     }
 
     let rpcSubscription: UnsubscribePromise;
@@ -264,7 +279,7 @@ class TestRunner {
     const testCompleteP: Promise<boolean> = new Promise((resolve) => {
       rpcSubscription = this._api.rpc.chain.subscribeNewHeads(async (header) => {
         const blockNumber = +header.number;
-        console.log(`Got block ${blockNumber}.`);
+        log.info(`Got block ${blockNumber}.`);
 
         // perform upgrade after delay
         if (this.options.upgrade && blockNumber === this.options.upgrade.block) {
@@ -277,13 +292,13 @@ class TestRunner {
           const { name, fn } = t.actions[blockNumber];
           try {
             await fn(this._api);
-            console.log(`Test '${t.name}' action '${name}' succeeded.`);
+            log.info(`Test '${t.name}' action '${name}' succeeded.`);
           } catch (e) {
-            console.log(`Test '${t.name}' action '${name}' failed: ${e.message}.`);
+            log.info(`Test '${t.name}' action '${name}' failed: ${e.message}.`);
           }
         }));
         if (this.tests.every((test) => test.isComplete(blockNumber))) {
-          console.log('All tests complete!');
+          log.info('All tests complete!');
           resolve(false);
         }
       });
@@ -304,7 +319,7 @@ class TestRunner {
     this._startChain(true);
 
     // 3. Construct API via websockets
-    await this._startApi();
+    const startVersion = await this._startApi();
 
     // 4. Run tests via API
     const needsUpgrade = await this._runTests();
@@ -313,7 +328,7 @@ class TestRunner {
     if (!needsUpgrade) {
       this._stopApi();
       await this._stopChain();
-      process.exit(0);
+      return;
     }
 
     // [5.] Upgrade chain via API
@@ -329,7 +344,12 @@ class TestRunner {
     }
 
     // [7.] Reconstruct API
-    await this._startApi();
+    const newVersion = await this._startApi();
+    if (startVersion >= newVersion) {
+      this._stopApi();
+      await this._stopChain();
+      throw new Error('Upgrade failed! Version did not change.');
+    }
 
     // [8.] Run additional tests post-upgrade
     await this._runTests();
@@ -337,7 +357,6 @@ class TestRunner {
     // Cleanup and exit
     this._stopApi();
     await this._stopChain();
-    process.exit(0);
   }
 }
 
