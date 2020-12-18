@@ -7,7 +7,7 @@ import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { UnsubscribePromise } from '@polkadot/api/types';
 import { TypeRegistry } from '@polkadot/types';
 import { compactAddLength } from '@polkadot/util';
-import * as EdgDefs from '@edgeware/node-types/interfaces/definitions';
+import { dev } from '@edgeware/node-types';
 import StateTest from './stateTest';
 
 // configuration options for test runner
@@ -157,7 +157,7 @@ class TestRunner {
     //   this._chainOutfile = undefined;
     // }
     if (this._chainProcess) {
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         this._chainProcess.on('close', (code) => {
           console.log(`Edgeware exited with code ${code}.`);
           resolve();
@@ -184,46 +184,14 @@ class TestRunner {
     // this promise waits for the provider to connect to the chain, and then
     // removes the listener for 'connected' events.
     let unsubscribe: () => void;
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       unsubscribe = provider.on('connected', () => resolve());
     });
     unsubscribe();
 
-    // configure edgeware types -- pull from @edgeware/node-types
-    const edgTypes: { [name: string]: string } = Object.values(EdgDefs)
-      .reduce((res, { types }) => ({ ...res, ...types }), {});
-    let types = {
-      ...edgTypes,
-
-      // overrides for scoped types
-      'voting::VoteType': 'VoteType',
-      'voting::TallyType': 'TallyType',
-    };
-
-    // These are overrides for default types, where edgeware is running
-    // an older version of modules than the current substrate. These will
-    // need to be maintained as the API upgrades the set of default types.
-    if (useOldOverrides) {
-      types = Object.assign(types, {
-
-        // overrides for old types
-        Address: 'GenericAddress',
-        Keys: 'SessionKeys4',
-        StakingLedger: 'StakingLedgerTo223',
-        Votes: 'VotesTo230',
-        ReferendumInfo: 'ReferendumInfoTo239',
-        Weight: 'u32',
-        OpenTip: 'OpenTipTo225',
-      });
-    } else {
-      types = Object.assign(types, {
-        OpenTip: 'OpenTipTo225',
-      });
-    }
-
     // initialize the API itself
     const registry = new TypeRegistry();
-    this._api = new ApiPromise({ provider, registry, types });
+    this._api = new ApiPromise({ provider, registry, ...dev });
     await this._api.isReady;
   }
 
@@ -238,7 +206,7 @@ class TestRunner {
   // Performs an upgrade via a `sudo(setCode())` API call.
   // 'useCodeChecks' specifies whether to perform API-level checks on the WASM blob,
   //   and should be set to false for the current edgeware upgrade.
-  private async _doUpgrade(useCodeChecks: boolean): Promise<any> {
+  private async _doUpgrade(useCodeChecks: boolean = true): Promise<any> {
     if (!this.options.upgrade) {
       console.log('No upgrade to perform!');
       return;
@@ -261,11 +229,11 @@ class TestRunner {
       ? this._api.tx.system.setCode(codecData)
       : this._api.tx.system.setCodeWithoutChecks(codecData);
 
-    // construct and submit sudo call using the sudo seed
-    const sudoCall = this._api.tx.sudo.sudo(upgradeCall);
+    // construct and submit sudo call using the sudo seed and weight 1
+    const sudoCall = this._api.tx.sudo.sudoUncheckedWeight(upgradeCall, 1);
     let txUnsubscribe: () => void;
     /* eslint-disable-next-line no-async-promise-executor */
-    await new Promise(async (resolve) => {
+    await new Promise<void>(async (resolve) => {
       txUnsubscribe = await sudoCall.signAndSend(sudoKey, (result) => {
         if (result.status.isFinalized) {
           console.log('Upgrade TX finalized!');
@@ -352,7 +320,7 @@ class TestRunner {
     }
 
     // [5.] Upgrade chain via API (false = do not use code checks, for now)
-    await this._doUpgrade(false);
+    await this._doUpgrade();
 
     // [6.] Restart chain with upgraded binary (if needed)
     /* TODO: uncomment this when the upgrade goes successfully
