@@ -3,14 +3,14 @@ import TestRunner from './testRunner';
 import StateTest from './stateTest';
 
 const CHAINSPEC = 'dev';
-const BINARY_PATH = '../edgeware-node/target/release/edgeware';
+const BINARY_PATH = '../edgeware-node-3.0.8/target/release/edgeware';
 const CHAIN_BASE_PATH = './chain-db';
 const ACCOUNTS = [ '//Alice' ];
 const SS58_PREFIX = 42; // default for testing chain specs
 
-const UPGRADE_BINARY = '../edgeware-node-time-travel/target/release/edgeware';
+const UPGRADE_BINARY = '../edgeware-node-develop/target/release/edgeware';
 const UPGRADE_BLOCK = 3;
-const UPGRADE_CODE = './test_runtime.wasm';
+const UPGRADE_CODE = '../edgeware-node-develop/edgeware_runtime.wasm';
 const SUDO_SEED = '//Alice';
 
 async function main() {

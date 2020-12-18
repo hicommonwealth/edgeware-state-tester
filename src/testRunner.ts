@@ -127,7 +127,7 @@ class TestRunner {
       '--chain', this.options.chainspec,
       '--base-path', this.options.chainBasePath,
       '--alice', // TODO: abstract this into accounts somehow
-      '-l', 'ws=trace,ws::handler=info'
+      '-l', 'ws::handler=info'
     ];
     console.log('Executing', this.options.binaryPath, 'with args', args);
     this._chainProcess = child_process.spawn(
@@ -171,10 +171,7 @@ class TestRunner {
 
   // With a valid chain running, construct a polkadot-js API and
   // initialize a connection to the chain.
-  // 'useOldOverrides' is currently a hack to support different type overrides
-  //   for existing Substrate types, and should be replaced eventually with an
-  //   "additionalTypes" argument, for more general usage.
-  private async _startApi(useOldOverrides: boolean): Promise<void> {
+  private async _startApi(): Promise<void> {
     console.log(`Connecting to chain at ${this.options.wsUrl}...`);
 
     // initialize provider separately from the API: the API throws an error
@@ -235,8 +232,8 @@ class TestRunner {
     /* eslint-disable-next-line no-async-promise-executor */
     await new Promise<void>(async (resolve) => {
       txUnsubscribe = await sudoCall.signAndSend(sudoKey, (result) => {
-        if (result.status.isFinalized) {
-          console.log('Upgrade TX finalized!');
+        if (result.status.isInBlock) {
+          console.log('Upgrade TX in block!');
           resolve();
         }
       });
@@ -307,7 +304,7 @@ class TestRunner {
     this._startChain(true);
 
     // 3. Construct API via websockets
-    await this._startApi(true);
+    await this._startApi();
 
     // 4. Run tests via API
     const needsUpgrade = await this._runTests();
@@ -319,11 +316,10 @@ class TestRunner {
       process.exit(0);
     }
 
-    // [5.] Upgrade chain via API (false = do not use code checks, for now)
+    // [5.] Upgrade chain via API
     await this._doUpgrade();
 
     // [6.] Restart chain with upgraded binary (if needed)
-    /* TODO: uncomment this when the upgrade goes successfully
     this._stopApi();
     if (this.options.upgrade.binaryPath
         && this.options.binaryPath !== this.options.upgrade.binaryPath) {
@@ -332,9 +328,8 @@ class TestRunner {
       this._startChain(false);
     }
 
-    // [7.] Reconstruct API (TODO: configure types specifically here)
-    await this._startApi(false);
-    */
+    // [7.] Reconstruct API
+    await this._startApi();
 
     // [8.] Run additional tests post-upgrade
     await this._runTests();
